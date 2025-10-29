@@ -6,6 +6,7 @@ about=This QGIS plugin lets you display a feed of articles containing a title, d
 version=1.2.3
 author=GeoWerkstatt GmbH
 email=support@geowerkstatt.ch
+supportsQt6=True
 
 tags=news, gis, organisation, information, feed
 
