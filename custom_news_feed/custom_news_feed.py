@@ -513,32 +513,29 @@ class CustomNewsFeed:
         """ Shows the settings dialog"""
         self.settings_dlg.config_json_path.setText(self.settings.value("CustomNewsFeed/json_file_path", ""))
         
-        # Get the stored value and convert to Qt.CheckState enum
-        stored_value = self.settings.value("CustomNewsFeed/open_on_news", QtCheckState.Checked.value if QT_VERSION >= 6 else QtCheckState.Checked)
+        # Handle CheckState - Qt6 needs enum, Qt5 needs int
+        check_state_value = int(self.settings.value("CustomNewsFeed/open_on_news", int(QtCheckState.Checked)))
         if QT_VERSION >= 6:
-            if isinstance(stored_value, Qt.CheckState):
-                check_state = stored_value
-            else:
-                # Convert int to Qt.CheckState
-                check_state = Qt.CheckState(int(stored_value))
-        else:
-            # Qt5: stored_value is already an int or Qt.CheckState enum value
-            check_state = stored_value if isinstance(stored_value, int) else int(stored_value)
-        self.settings_dlg.openPanelOnNewsCheckBox.setCheckState(check_state)
+            check_state_value = QtCheckState(check_state_value)
+
+        self.settings_dlg.openPanelOnNewsCheckBox.setCheckState(check_state_value)
         
-        if self.settings_dlg.config_json_path.text() == "":
+        if not self.settings_dlg.config_json_path.text():
             self.settings_dlg.config_json_path.setPlaceholderText("https://")
-        self.settings_dlg.show()
-        result = self.settings_dlg.exec()
-        if result:
-            path = self.settings_dlg.config_json_path.text()
-            self.settings.setValue("CustomNewsFeed/json_file_path", path)
-            check_state_value = self.settings_dlg.openPanelOnNewsCheckBox.checkState()
-            if QT_VERSION >= 6:
-                self.settings.setValue("CustomNewsFeed/open_on_news", check_state_value.value)
-            else:
-                self.settings.setValue("CustomNewsFeed/open_on_news", check_state_value)
-            self.display_news_content(path)
+        
+        # Show dialog and exit if cancelled
+        if not self.settings_dlg.exec():
+            return
+        
+        # Save settings
+        path = self.settings_dlg.config_json_path.text()
+        self.settings.setValue("CustomNewsFeed/json_file_path", path)
+        self.settings.setValue(
+            "CustomNewsFeed/open_on_news",
+            int(self.settings_dlg.openPanelOnNewsCheckBox.checkState())
+        )
+        
+        self.display_news_content(path)
 
     def choose_file(self):
         """Allows the user to choose a local path for the config file."""
