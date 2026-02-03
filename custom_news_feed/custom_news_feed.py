@@ -28,18 +28,50 @@ import json
 import hashlib
 
 from qgis.PyQt.QtCore import QLocale, QTranslator, QCoreApplication, Qt, QTimer, QUrl, QDir
-from qgis.PyQt.QtGui import QIcon, QPixmap, QImage
-from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest 
+from qgis.PyQt.QtGui import QIcon, QPixmap
+from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkAccessManager, QNetworkRequest 
 from qgis.core import Qgis, QgsMessageLog, QgsBlockingNetworkRequest, QgsApplication, QgsSettings
 from qgis.PyQt.QtWidgets import QAction, QApplication, QWidget, \
                             QVBoxLayout, QHBoxLayout,\
                             QLabel, QFileDialog, QPushButton, QSpacerItem
+from qgis.PyQt import QtCore
 
 from .custom_news_feed_dockwidget import CustomNewsFeedDockWidget
 from .news_feed_settings_dialog import NewsFeedSettingsDialog
 from datetime import datetime
 from functools import partial
 from os.path import abspath, isdir, isfile, join
+
+# Qt5/Qt6 compatibility layer
+def get_qt_version():
+    """Detect Qt version"""
+    return int(QtCore.QT_VERSION_STR.split('.')[0])
+
+QT_VERSION = get_qt_version()
+
+# Create compatibility aliases for Qt enums
+if QT_VERSION >= 6:
+    # Qt6 uses nested enums
+    QtMouseButton = Qt.MouseButton
+    QtDockWidgetArea = Qt.DockWidgetArea
+    QtCursorShape = Qt.CursorShape
+    QtCheckState = Qt.CheckState
+    QtTextFormat = Qt.TextFormat
+    QtTransformationMode = Qt.TransformationMode
+    QgsMessageLevel = Qgis.MessageLevel
+    QNetworkError = QNetworkReply.NetworkError
+    QgsBlockingError = QgsBlockingNetworkRequest.ErrorCode
+else:
+    # Qt5 uses flat enums
+    QtMouseButton = Qt
+    QtDockWidgetArea = Qt
+    QtCursorShape = Qt
+    QtCheckState = Qt
+    QtTextFormat = Qt
+    QtTransformationMode = Qt
+    QgsMessageLevel = Qgis
+    QNetworkError = QNetworkReply
+    QgsBlockingError = QgsBlockingNetworkRequest
 
 class CustomNewsFeed:
     """QGIS Plugin Implementation."""
@@ -110,6 +142,9 @@ class CustomNewsFeed:
         # Add update interval to update news once a day
         self.timer = QTimer()
         self.timer.timeout.connect(self.reloadNews)
+
+        # Network manager for loading images
+        self.network_manager = QNetworkAccessManager(self.iface.mainWindow())
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -192,7 +227,7 @@ class CustomNewsFeed:
         return action
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() == QtMouseButton.LeftButton:
             self.clicked.emit()
 
     def prerun(self):
@@ -243,7 +278,7 @@ class CustomNewsFeed:
 
         # Show the dockwidget
         if not self.dockwidget.isUserVisible():
-            self.iface.addTabifiedDockWidget(Qt.RightDockWidgetArea, self.dockwidget, raiseTab=True)
+            self.iface.addTabifiedDockWidget(QtDockWidgetArea.RightDockWidgetArea, self.dockwidget, raiseTab=True)
             self.dockwidget.show()
             self.dockwidget.close()
 
@@ -286,7 +321,7 @@ class CustomNewsFeed:
             self.show_panel()
 
         except Exception as e:
-            self.iface.messageBar().pushMessage("Fehler im Custom News Feed Plugin", str(e), level = Qgis.Critical)
+            self.iface.messageBar().pushMessage("Fehler im Custom News Feed Plugin", str(e), level = QgsMessageLevel.Critical)
             QgsMessageLog.logMessage(u'Error Reading Config file, missing field ' + str(e),'Custom News Feed')
 
     def toggle_message_hashfile(self, event):
@@ -346,7 +381,7 @@ class CustomNewsFeed:
                 linkBox = QVBoxLayout()
                 linkBox.setContentsMargins(0,0,0,0)
                 label= QLabel("<a href='% s'>% s</a>" % (link['Url'], link['LinkTitle']))
-                label.setTextFormat(Qt.RichText)
+                label.setTextFormat(QtTextFormat.RichText)
                 label.setOpenExternalLinks(True)
                 linkBox.addWidget(label)
                 linkWidget.setLayout(linkBox)
@@ -395,7 +430,7 @@ class CustomNewsFeed:
 
     def mark_all_as_read(self, newsArticles):
         """Mark all news as read"""
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(QtCursorShape.WaitCursor)
         for index, newsArticle in enumerate(newsArticles):
             startdate, enddate = self.getStartEndDate(newsArticle)
             if self.check_hashfile(newsArticle["Hash"]) == False and self.checkPublishingDate(startdate, enddate) == True:
@@ -457,18 +492,18 @@ class CustomNewsFeed:
         if hasUnreadNews == False:
             self.dockwidget.close()
             if self.check_hashfile(self.createHash(self.current_pinned_message["Text"])):
-                self.iface.messageBar().pushMessage("Warning", "Aktuell existieren keine ungelesenen Nachrichten", level=Qgis.Info)
+                self.iface.messageBar().pushMessage("Warning", "Aktuell existieren keine ungelesenen Nachrichten", level=QgsMessageLevel.Info)
 
     def show_panel(self):
         if not self.dockwidget.isUserVisible():
             if self.forceShowGui is False and self.hasNewArticles:
-                self.forceShowGui = self.settings_dlg.openPanelOnNewsCheckBox.checkState() == Qt.Checked
+                self.forceShowGui = self.settings_dlg.openPanelOnNewsCheckBox.checkState() == QtCheckState.Checked
 
             if self.forceShowGui:
                 self.dockwidget.show()
                 self.dockwidget.raise_()
             elif self.hasNewArticles:
-                self.iface.messageBar().pushMessage("Info", "Es liegen neue Nachrichten vor!", level=Qgis.Info)
+                self.iface.messageBar().pushMessage("Info", "Es liegen neue Nachrichten vor!", level=QgsMessageLevel.Info)
 
         self.forceShowGui = False
 
@@ -478,15 +513,32 @@ class CustomNewsFeed:
     def run_settings(self):
         """ Shows the settings dialog"""
         self.settings_dlg.config_json_path.setText(self.settings.value("CustomNewsFeed/json_file_path", ""))
-        self.settings_dlg.openPanelOnNewsCheckBox.setCheckState(int(self.settings.value("CustomNewsFeed/open_on_news", Qt.Checked)))
+        
+        # Get the stored value and convert to Qt.CheckState enum
+        stored_value = self.settings.value("CustomNewsFeed/open_on_news", QtCheckState.Checked.value if QT_VERSION >= 6 else QtCheckState.Checked)
+        if QT_VERSION >= 6:
+            if isinstance(stored_value, Qt.CheckState):
+                check_state = stored_value
+            else:
+                # Convert int to Qt.CheckState
+                check_state = Qt.CheckState(int(stored_value))
+        else:
+            # Qt5: stored_value is already an int or Qt.CheckState enum value
+            check_state = stored_value if isinstance(stored_value, int) else int(stored_value)
+        self.settings_dlg.openPanelOnNewsCheckBox.setCheckState(check_state)
+        
         if self.settings_dlg.config_json_path.text() == "":
             self.settings_dlg.config_json_path.setPlaceholderText("https://")
         self.settings_dlg.show()
-        result = self.settings_dlg.exec_()
+        result = self.settings_dlg.exec()
         if result:
-            path = unicode(self.settings_dlg.config_json_path.text())
+            path = self.settings_dlg.config_json_path.text()
             self.settings.setValue("CustomNewsFeed/json_file_path", path)
-            self.settings.setValue("CustomNewsFeed/open_on_news", self.settings_dlg.openPanelOnNewsCheckBox.checkState())
+            check_state_value = self.settings_dlg.openPanelOnNewsCheckBox.checkState()
+            if QT_VERSION >= 6:
+                self.settings.setValue("CustomNewsFeed/open_on_news", check_state_value.value)
+            else:
+                self.settings.setValue("CustomNewsFeed/open_on_news", check_state_value)
             self.display_news_content(path)
 
     def choose_file(self):
@@ -497,18 +549,130 @@ class CustomNewsFeed:
                     filter = '*.json')[0]
         self.settings_dlg.config_json_path.setText(path)
 
+    def load_image_from_url(self, url, label, width=150):
+        """Load an image from URL and set it on a QLabel"""
+        if QT_VERSION >= 6:
+            # Qt6: Use async loading with weak references
+            import weakref
+            
+            # Store weak reference to avoid keeping label alive
+            label_ref = weakref.ref(label)
+            
+            request = QNetworkRequest(QUrl(url))
+            reply = self.network_manager.get(request)
+
+            def finished():
+                try:
+                    # Check if reply is still valid
+                    if not reply:
+                        return
+                        
+                    if reply.error() != QNetworkError.NoError:
+                        QgsMessageLog.logMessage(
+                            f"Failed to load image {url}: {reply.errorString()}",
+                            "Custom News Feed",
+                            level=QgsMessageLevel.Warning
+                        )
+                        reply.deleteLater()
+                        return
+
+                    # Get the label from weak reference
+                    label_obj = label_ref()
+                    if not label_obj:
+                        # Label has been deleted
+                        reply.deleteLater()
+                        return
+
+                    pixmap = QPixmap()
+                    pixmap.loadFromData(reply.readAll())
+
+                    if pixmap.isNull():
+                        QgsMessageLog.logMessage(
+                            f"Loaded image is null: {url}",
+                            "Custom News Feed",
+                            level=QgsMessageLevel.Warning
+                        )
+                    else:
+                        # Check if label still exists and is valid before setting pixmap
+                        try:
+                            if label_obj and not label_obj.isHidden():
+                                pixmap = pixmap.scaledToWidth(
+                                    width,
+                                    QtTransformationMode.SmoothTransformation
+                                )
+                                label_obj.setPixmap(pixmap)
+                        except (RuntimeError, AttributeError):
+                            # Label has been deleted or is invalid, ignore
+                            pass
+
+                    reply.deleteLater()
+                except Exception as e:
+                    QgsMessageLog.logMessage(
+                        f"Exception in image loading callback: {str(e)}",
+                        "Custom News Feed",
+                        level=QgsMessageLevel.Warning
+                    )
+                    if reply:
+                        reply.deleteLater()
+
+            reply.finished.connect(finished)
+        else:
+            # Qt5: Use synchronous loading to avoid crashes
+            try:
+                request = QNetworkRequest(QUrl(url))
+                blockingRequest = QgsBlockingNetworkRequest()
+                
+                error_code = blockingRequest.get(request)
+                if error_code == QgsBlockingError.NoError:
+                    reply_content = blockingRequest.reply()
+                    if reply_content.error() == QNetworkError.NoError:
+                        pixmap = QPixmap()
+                        pixmap.loadFromData(reply_content.content())
+                        
+                        if not pixmap.isNull():
+                            pixmap = pixmap.scaledToWidth(
+                                width,
+                                QtTransformationMode.SmoothTransformation
+                            )
+                            label.setPixmap(pixmap)
+                        else:
+                            QgsMessageLog.logMessage(
+                                f"Loaded image is null: {url}",
+                                "Custom News Feed",
+                                level=QgsMessageLevel.Warning
+                            )
+                    else:
+                        QgsMessageLog.logMessage(
+                            f"Failed to load image {url}: {reply_content.errorString()}",
+                            "Custom News Feed",
+                            level=QgsMessageLevel.Warning
+                        )
+                else:
+                    QgsMessageLog.logMessage(
+                        f"Failed to load image {url}: {blockingRequest.errorMessage()}",
+                        "Custom News Feed",
+                        level=QgsMessageLevel.Warning
+                    )
+            except Exception as e:
+                QgsMessageLog.logMessage(
+                    f"Exception loading image {url}: {str(e)}",
+                    "Custom News Feed",
+                    level=QgsMessageLevel.Warning
+                )
+
     def load_json_from_file(self, path):
         """Gets the text content from a path. May be a local path, or an url"""
         txt = None
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(QtCursorShape.WaitCursor)
         try:
             if path[0:4].lower() == 'http':
                 request = QNetworkRequest(QUrl(path))
                 blockingRequest = QgsBlockingNetworkRequest()
+                
                 result = blockingRequest.get(request)
-                if result == QgsBlockingNetworkRequest.NoError:
+                if result == QgsBlockingError.NoError:
                     reply = blockingRequest.reply()
-                    if reply.error() == QNetworkReply.NoError:
+                    if reply.error() == QNetworkError.NoError:
                         txt = str(reply.content(), 'utf-8')
                     else:
                         QgsMessageLog.logMessage(u'Error reading file ' + reply.errorString(),'Custom News Feed')
@@ -525,7 +689,7 @@ class CustomNewsFeed:
                 self.tr(u'Die Datei ') + path +
                 self.tr(u' konnte nicht gelesen werden. ') +
                 self.tr(u'Mehr Informationen im QGis message log. Beispielhafte News werden angezeigt.'),
-                level = Qgis.Critical)
+                level = QgsMessageLevel.Critical)
             QgsMessageLog.logMessage(u'Error reading file ' + str(e),'Custom News Feed')
             with open(os.path.join(self.plugin_dir, 'sample_news','sample_news.json'),'r', encoding='utf-8') as f:
                 txt = f.read()
@@ -539,7 +703,7 @@ class CustomNewsFeed:
             self.iface.messageBar().pushMessage("Fehler im Custom News Feed Plugin",
                     self.tr(u'JSON-file konnte nicht geladen werden. ') +
                     self.tr(u'Mehr Informationen im QGis message log.'),
-                    level = Qgis.Critical)
+                    level = QgsMessageLevel.Critical)
             QgsMessageLog.logMessage(u'Error Initializing Config file ' + str(e),'Custom News Feed')
         return json_content
 
@@ -555,7 +719,7 @@ class CustomNewsFeed:
             self.iface.messageBar().pushMessage("Fehler im Custom News Feed Plugin",
                     self.tr(u'News konnten nicht gespeichert werden. ') +
                     self.tr(u'Mehr Informationen im QGis message log.'),
-                    level = Qgis.Critical)
+                    level = QgsMessageLevel.Critical)
             QgsMessageLog.logMessage(u'Error writing previous_news file: ' + str(e),'Custom News Feed')
 
     def remove_deprecated_hashfiles(self):
@@ -602,7 +766,7 @@ class CustomNewsFeed:
         
         if not newsArticle['LinkTitle'] == "":
             link = QLabel("<a href='% s'>% s</a>" % (newsArticle['LinkUrl'], newsArticle['LinkTitle']))
-            link.setTextFormat(Qt.RichText)
+            link.setTextFormat(QtTextFormat.RichText)
             link.setOpenExternalLinks(True)
             textBox.addWidget(link)
     
@@ -615,41 +779,37 @@ class CustomNewsFeed:
             readbutton.adjustSize()
             textBox.addWidget(readbutton)
 
-        if not newsArticle["ImageUrl"] == "":
+        if newsArticle["ImageUrl"]:
             imageBox = QVBoxLayout()
-            image = QImage()
+
+            image_label = QLabel()
+            image_label.setFixedWidth(150)
+
             imageUrl = newsArticle["ImageUrl"]
-            try:
-                if imageUrl[0:4].lower() == 'http':
-                    request = QNetworkRequest(QUrl(imageUrl))
-                    blockingRequest = QgsBlockingNetworkRequest()
-                    result = blockingRequest.get(request)
-                    if result == QgsBlockingNetworkRequest.NoError:
-                        reply = blockingRequest.reply()
-                        if reply.error() == QNetworkReply.NoError:
-                            image.loadFromData(reply.content())
-                        else:
-                            image = None
-                            QgsMessageLog.logMessage(u'Error reading image ' + reply.errorString(),'Custom News Feed')
-                    else:
-                        image = None
-                        QgsMessageLog.logMessage(u'Error reading image ' + blockingRequest.errorMessage(),'Custom News Feed')
-                else :
-                    with open(imageUrl, 'rb') as file:
-                        image.loadFromData(file.read())
-            except Exception as e:                                    
-                self.iface.messageBar().pushMessage("Fehler im Custom News Feed Plugin",
-                    self.tr(u'Das Bild mit der Url ') + imageUrl +
-                    self.tr(u' konnte nicht geladen werden. '),
-                    level = Qgis.Critical)
-                QgsMessageLog.logMessage(u'Error reading image ' + str(e),'Custom News Feed')
-            if image is not None:
-                image_label = QLabel()
-                image_label.setFixedWidth(150)
-                image_label.setPixmap(QPixmap(image).scaledToWidth(150, Qt.SmoothTransformation))
-                imageBox.setContentsMargins(10,15,0,0)
-                imageBox.addWidget(image_label)
-                articleBox.addLayout(imageBox)
+
+            if imageUrl.lower().startswith("http"):
+                # async HTTP image loading
+                self.load_image_from_url(imageUrl, image_label)
+            else:
+                # local file (safe to load synchronously)
+                pixmap = QPixmap(imageUrl)
+                if not pixmap.isNull():
+                    pixmap = pixmap.scaledToWidth(
+                        150,
+                        QtTransformationMode.SmoothTransformation
+                    )
+                    image_label.setPixmap(pixmap)
+                else:
+                    QgsMessageLog.logMessage(
+                        f"Failed to load local image: {imageUrl}",
+                        "Custom News Feed",
+                        level=QgsMessageLevel.Warning
+                    )
+
+            imageBox.setContentsMargins(10, 15, 0, 0)
+            imageBox.addWidget(image_label)
+            articleBox.addLayout(imageBox)
+
         
         articleBox.setContentsMargins(0,0,0,10)
         return articleWidget, isUnread
