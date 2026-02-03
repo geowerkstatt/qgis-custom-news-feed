@@ -27,14 +27,13 @@ import os.path
 import json
 import hashlib
 
-from qgis.PyQt.QtCore import QLocale, QTranslator, QCoreApplication, Qt, QTimer, QUrl, QDir
+from qgis.PyQt.QtCore import QLocale, QTranslator, QCoreApplication, Qt, QTimer, QUrl, QDir, QT_VERSION_STR
 from qgis.PyQt.QtGui import QIcon, QPixmap
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkAccessManager, QNetworkRequest 
 from qgis.core import Qgis, QgsMessageLog, QgsBlockingNetworkRequest, QgsApplication, QgsSettings
 from qgis.PyQt.QtWidgets import QAction, QApplication, QWidget, \
                             QVBoxLayout, QHBoxLayout,\
                             QLabel, QFileDialog, QPushButton, QSpacerItem
-from qgis.PyQt import QtCore
 
 from .custom_news_feed_dockwidget import CustomNewsFeedDockWidget
 from .news_feed_settings_dialog import NewsFeedSettingsDialog
