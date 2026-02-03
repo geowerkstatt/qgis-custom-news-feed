@@ -44,7 +44,7 @@ from os.path import abspath, isdir, isfile, join
 # Qt5/Qt6 compatibility layer
 def get_qt_version():
     """Detect Qt version"""
-    return int(QtCore.QT_VERSION_STR.split('.')[0])
+    return int(QT_VERSION_STR.split('.')[0])
 
 QT_VERSION = get_qt_version()
 
