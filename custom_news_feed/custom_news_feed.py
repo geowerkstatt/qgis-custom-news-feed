@@ -192,7 +192,7 @@ class CustomNewsFeed:
         return action
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
 
     def prerun(self):
@@ -243,7 +243,7 @@ class CustomNewsFeed:
 
         # Show the dockwidget
         if not self.dockwidget.isUserVisible():
-            self.iface.addTabifiedDockWidget(Qt.RightDockWidgetArea, self.dockwidget, raiseTab=True)
+            self.iface.addTabifiedDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dockwidget, raiseTab=True)
             self.dockwidget.show()
             self.dockwidget.close()
 
@@ -286,7 +286,7 @@ class CustomNewsFeed:
             self.show_panel()
 
         except Exception as e:
-            self.iface.messageBar().pushMessage("Fehler im Custom News Feed Plugin", str(e), level = Qgis.Critical)
+            self.iface.messageBar().pushMessage("Fehler im Custom News Feed Plugin", str(e), level = Qgis.MessageLevel.Critical)
             QgsMessageLog.logMessage(u'Error Reading Config file, missing field ' + str(e),'Custom News Feed')
 
     def toggle_message_hashfile(self, event):
@@ -346,7 +346,7 @@ class CustomNewsFeed:
                 linkBox = QVBoxLayout()
                 linkBox.setContentsMargins(0,0,0,0)
                 label= QLabel("<a href='% s'>% s</a>" % (link['Url'], link['LinkTitle']))
-                label.setTextFormat(Qt.RichText)
+                label.setTextFormat(Qt.TextFormat.RichText)
                 label.setOpenExternalLinks(True)
                 linkBox.addWidget(label)
                 linkWidget.setLayout(linkBox)
@@ -395,7 +395,7 @@ class CustomNewsFeed:
 
     def mark_all_as_read(self, newsArticles):
         """Mark all news as read"""
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         for index, newsArticle in enumerate(newsArticles):
             startdate, enddate = self.getStartEndDate(newsArticle)
             if self.check_hashfile(newsArticle["Hash"]) == False and self.checkPublishingDate(startdate, enddate) == True:
@@ -457,18 +457,18 @@ class CustomNewsFeed:
         if hasUnreadNews == False:
             self.dockwidget.close()
             if self.check_hashfile(self.createHash(self.current_pinned_message["Text"])):
-                self.iface.messageBar().pushMessage("Warning", "Aktuell existieren keine ungelesenen Nachrichten", level=Qgis.Info)
+                self.iface.messageBar().pushMessage("Warning", "Aktuell existieren keine ungelesenen Nachrichten", level=Qgis.MessageLevel.Info)
 
     def show_panel(self):
         if not self.dockwidget.isUserVisible():
             if self.forceShowGui is False and self.hasNewArticles:
-                self.forceShowGui = self.settings_dlg.openPanelOnNewsCheckBox.checkState() == Qt.Checked
+                self.forceShowGui = self.settings_dlg.openPanelOnNewsCheckBox.checkState() == Qt.CheckState.Checked
 
             if self.forceShowGui:
                 self.dockwidget.show()
                 self.dockwidget.raise_()
             elif self.hasNewArticles:
-                self.iface.messageBar().pushMessage("Info", "Es liegen neue Nachrichten vor!", level=Qgis.Info)
+                self.iface.messageBar().pushMessage("Info", "Es liegen neue Nachrichten vor!", level=Qgis.MessageLevel.Info)
 
         self.forceShowGui = False
 
@@ -478,13 +478,13 @@ class CustomNewsFeed:
     def run_settings(self):
         """ Shows the settings dialog"""
         self.settings_dlg.config_json_path.setText(self.settings.value("CustomNewsFeed/json_file_path", ""))
-        self.settings_dlg.openPanelOnNewsCheckBox.setCheckState(int(self.settings.value("CustomNewsFeed/open_on_news", Qt.Checked)))
+        self.settings_dlg.openPanelOnNewsCheckBox.setCheckState(int(self.settings.value("CustomNewsFeed/open_on_news", Qt.CheckState.Checked)))
         if self.settings_dlg.config_json_path.text() == "":
             self.settings_dlg.config_json_path.setPlaceholderText("https://")
         self.settings_dlg.show()
-        result = self.settings_dlg.exec_()
+        result = self.settings_dlg.exec()
         if result:
-            path = unicode(self.settings_dlg.config_json_path.text())
+            path = self.settings_dlg.config_json_path.text()
             self.settings.setValue("CustomNewsFeed/json_file_path", path)
             self.settings.setValue("CustomNewsFeed/open_on_news", self.settings_dlg.openPanelOnNewsCheckBox.checkState())
             self.display_news_content(path)
@@ -500,15 +500,15 @@ class CustomNewsFeed:
     def load_json_from_file(self, path):
         """Gets the text content from a path. May be a local path, or an url"""
         txt = None
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             if path[0:4].lower() == 'http':
                 request = QNetworkRequest(QUrl(path))
                 blockingRequest = QgsBlockingNetworkRequest()
                 result = blockingRequest.get(request)
-                if result == QgsBlockingNetworkRequest.NoError:
+                if result == QgsBlockingNetworkRequest.ErrorCode.NoError:
                     reply = blockingRequest.reply()
-                    if reply.error() == QNetworkReply.NoError:
+                    if reply.error() == QNetworkReply.NetworkError.NoError:
                         txt = str(reply.content(), 'utf-8')
                     else:
                         QgsMessageLog.logMessage(u'Error reading file ' + reply.errorString(),'Custom News Feed')
@@ -525,7 +525,7 @@ class CustomNewsFeed:
                 self.tr(u'Die Datei ') + path +
                 self.tr(u' konnte nicht gelesen werden. ') +
                 self.tr(u'Mehr Informationen im QGis message log. Beispielhafte News werden angezeigt.'),
-                level = Qgis.Critical)
+                level = Qgis.MessageLevel.Critical)
             QgsMessageLog.logMessage(u'Error reading file ' + str(e),'Custom News Feed')
             with open(os.path.join(self.plugin_dir, 'sample_news','sample_news.json'),'r', encoding='utf-8') as f:
                 txt = f.read()
@@ -539,7 +539,7 @@ class CustomNewsFeed:
             self.iface.messageBar().pushMessage("Fehler im Custom News Feed Plugin",
                     self.tr(u'JSON-file konnte nicht geladen werden. ') +
                     self.tr(u'Mehr Informationen im QGis message log.'),
-                    level = Qgis.Critical)
+                    level = Qgis.MessageLevel.Critical)
             QgsMessageLog.logMessage(u'Error Initializing Config file ' + str(e),'Custom News Feed')
         return json_content
 
@@ -555,7 +555,7 @@ class CustomNewsFeed:
             self.iface.messageBar().pushMessage("Fehler im Custom News Feed Plugin",
                     self.tr(u'News konnten nicht gespeichert werden. ') +
                     self.tr(u'Mehr Informationen im QGis message log.'),
-                    level = Qgis.Critical)
+                    level = Qgis.MessageLevel.Critical)
             QgsMessageLog.logMessage(u'Error writing previous_news file: ' + str(e),'Custom News Feed')
 
     def remove_deprecated_hashfiles(self):
@@ -602,7 +602,7 @@ class CustomNewsFeed:
         
         if not newsArticle['LinkTitle'] == "":
             link = QLabel("<a href='% s'>% s</a>" % (newsArticle['LinkUrl'], newsArticle['LinkTitle']))
-            link.setTextFormat(Qt.RichText)
+            link.setTextFormat(Qt.TextFormat.RichText)
             link.setOpenExternalLinks(True)
             textBox.addWidget(link)
     
@@ -624,9 +624,9 @@ class CustomNewsFeed:
                     request = QNetworkRequest(QUrl(imageUrl))
                     blockingRequest = QgsBlockingNetworkRequest()
                     result = blockingRequest.get(request)
-                    if result == QgsBlockingNetworkRequest.NoError:
+                    if result == QgsBlockingNetworkRequest.ErrorCode.NoError:
                         reply = blockingRequest.reply()
-                        if reply.error() == QNetworkReply.NoError:
+                        if reply.error() == QNetworkReply.NetworkError.NoError:
                             image.loadFromData(reply.content())
                         else:
                             image = None
@@ -641,12 +641,12 @@ class CustomNewsFeed:
                 self.iface.messageBar().pushMessage("Fehler im Custom News Feed Plugin",
                     self.tr(u'Das Bild mit der Url ') + imageUrl +
                     self.tr(u' konnte nicht geladen werden. '),
-                    level = Qgis.Critical)
+                    level = Qgis.MessageLevel.Critical)
                 QgsMessageLog.logMessage(u'Error reading image ' + str(e),'Custom News Feed')
             if image is not None:
                 image_label = QLabel()
                 image_label.setFixedWidth(150)
-                image_label.setPixmap(QPixmap(image).scaledToWidth(150, Qt.SmoothTransformation))
+                image_label.setPixmap(QPixmap(image).scaledToWidth(150, Qt.TransformationMode.SmoothTransformation))
                 imageBox.setContentsMargins(10,15,0,0)
                 imageBox.addWidget(image_label)
                 articleBox.addLayout(imageBox)
