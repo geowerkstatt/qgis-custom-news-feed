@@ -462,7 +462,7 @@ class CustomNewsFeed:
         self.forceShowGui = False
 
     def createHash(self, text):
-        return hashlib.md5(str(text).encode('utf-8')).hexdigest()
+        return hashlib.md5(str(text).encode('utf-8'), usedforsecurity=False).hexdigest()
 
     def run_settings(self):
         """ Shows the settings dialog"""
