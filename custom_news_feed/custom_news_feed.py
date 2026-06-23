@@ -467,7 +467,7 @@ class CustomNewsFeed:
     def run_settings(self):
         """ Shows the settings dialog"""
         self.settings_dlg.config_json_path.setText(self.settings.value("CustomNewsFeed/json_file_path", ""))
-        self.settings_dlg.openPanelOnNewsCheckBox.setCheckState(int(self.settings.value("CustomNewsFeed/open_on_news", Qt.CheckState.Checked)))
+        self.settings_dlg.openPanelOnNewsCheckBox.setCheckState(Qt.CheckState(int(self.settings.value("CustomNewsFeed/open_on_news", Qt.CheckState.Checked))))
         if self.settings_dlg.config_json_path.text() == "":
             self.settings_dlg.config_json_path.setPlaceholderText("https://")
         self.settings_dlg.show()
